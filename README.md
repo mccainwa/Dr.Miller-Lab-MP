@@ -1,12 +1,28 @@
 # Dr.Miller-Lab-MP
 
 ---
-
-# Viral Amino Acid Mutation Prediction Toolkit
-
 ## Overview
 
-The Viral Amino Acid Mutation Prediction Toolkit is a comprehensive software package designed to facilitate the extraction, preprocessing, training, and mutation prediction from viral genomic data. It harnesses the power of unsupervised machine learning, including variational autoencoders (VAE), Recurrent Neural Networks (RNN), and Long Short-Term Memory Neural Networks (LSTM), to uncover hidden mutational patterns within viral genomes. This toolkit focuses primarily on Sars-Cov-2 but can be adapted for other viruses.
+**AEGIS (AutoEncoder-driven Genomic Insight System)** is an unsupervised machine learning framework designed to identify mutation-prone amino acid positions in viral proteins, with a primary focus on the SARS-CoV-2 Spike Receptor Binding Domain (RBD).
+
+AEGIS leverages a deep autoencoder trained on aligned viral protein sequences and applies Monte Carlo dropout at inference time to quantify epistemic uncertainty in amino acid predictions. Positions exhibiting high predictive ambiguity—characterized by elevated entropy and small probability margins between competing residues—are interpreted as being under increased evolutionary pressure.
+
+To further ground predictions in biological realism, AEGIS incorporates position-specific Markov transition modeling to capture observed amino acid substitution dynamics. Probabilistic outputs from the autoencoder and Markov model are fused to produce a ranked list of mutation “hotspots” that reflect both statistical uncertainty and evolutionary plausibility.
+
+Rather than predicting a single deterministic mutation, AEGIS highlights regions of the protein landscape most susceptible to change, making it well-suited for viral surveillance, hypothesis generation, and downstream experimental prioritization.
+
+## High-Level Pipeline
+
+1. Sequence ingestion and cleaning  
+2. One-hot encoding of aligned amino acid sequences  
+3. Autoencoder training  
+4. Monte Carlo dropout inference  
+5. Entropy and epistemic uncertainty estimation  
+6. Markov transition modeling  
+7. Probability fusion and hotspot ranking  
+8. Visualization and export of results  
+
+---
 
 ## Functionality
 
@@ -70,7 +86,120 @@ predictions = predict_mutations.predict_mutations(trained_model, clean_data)
 print(predictions)
 ```
 
-## Contributing
+
+
+## Data Input
+
+- Input data is provided as an aligned Excel file:
+  - Column 0: sequence identifier
+  - Columns 1…N: amino acids per position
+- Rows containing ambiguous amino acids (`X`, `J`) are removed
+- Gap characters (`-`) are replaced with the column-wise modal amino acid
+- The reference implementation was developed using:
+  - `All_RBD.xlsx` (SARS-CoV-2 Spike RBD)
+
+---
+
+## Model Architecture
+
+### Autoencoder
+
+- Input: one-hot encoded tensor of shape  
+  `(sequence_length × number_of_amino_acids)`
+- Encoder:
+  - Flatten → Dense → Dropout (MC-enabled)
+- Decoder:
+  - Dense → Reshape → Softmax per position
+- Loss function: Mean Squared Error (MSE)
+- Optimizer: Adam
+
+Dropout layers remain active during inference to enable Monte Carlo sampling.
+
+---
+
+## Monte Carlo Dropout and Uncertainty Estimation
+
+- The trained autoencoder is evaluated across multiple stochastic forward passes (default: 200)
+- Each pass yields a probability distribution over amino acids per position
+- Aggregated metrics include:
+  - Mean probability distribution
+  - Epistemic variance
+  - Shannon entropy per residue
+
+These metrics identify positions where the model exhibits consistent uncertainty, a signal associated with mutational flexibility.
+
+---
+
+## Markov Transition Modeling
+
+To incorporate evolutionary context:
+
+- A position-specific Markov transition matrix is constructed from observed amino acid transitions
+- Laplace smoothing is applied to stabilize estimates
+- The stationary distribution of each matrix represents evolutionary preference
+- Monte Carlo probabilities are fused with Markov priors:
+
+\[
+p_{\text{fused}} \propto p_{\text{MC}}^{\lambda} \cdot p_{\text{Markov}}^{(1-\lambda)}
+\]
+
+This fusion discourages biologically implausible mutation predictions.
+
+---
+
+## Mutation Hotspot Scoring
+
+Each amino acid position is ranked using a composite score derived from:
+
+- Low Top-1 vs Top-2 probability margin
+- High Shannon entropy
+- (Optionally) high epistemic variance
+
+Higher scores indicate statistically ambiguous and evolutionarily permissive sites.
+
+---
+
+## Outputs
+
+Key outputs include:
+
+- `top_mutations_mc.xlsx` — most ambiguous mutation candidates
+- `aegis_mc_markov_fused_hotspots.xlsx` — final ranked mutation hotspots
+- `figures/` directory containing:
+  - Entropy and epistemic variance plots
+  - Mutation probability heatmaps
+  - Hotspot rankings and confidence visualizations
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/<your-username>/Dr.Miller-Lab-MP.git
+cd Dr.Miller-Lab-MP
+pip install -r requirements.txt
+
+**Running the Model**
+
+1. Place your aligned amino acid Excel file in the project directory
+
+2. Update file paths inside the script if necessary
+
+3. Run: python final_Sars_MC_AE.py
+
+Outputs will be written to the working directory.
+
+**Contributing**
 
 We welcome contributions to improve this toolkit! If you'd like to enhance its functionality, feel free to create a pull request.
+
+**Disclaimer**
+
+This software is intended for research and exploratory use only.
+It does not provide clinical, diagnostic, or therapeutic predictions.
+
+**Acknowledgments**
+
+Developed in the Miller Lab.
+Code authored by Brandon Lim, Emmanuel Broni, and Whelton Miller, PhD.
 
